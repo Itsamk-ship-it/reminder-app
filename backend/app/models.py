@@ -12,6 +12,7 @@ from app.database import Base
 class ReminderStatus(str, enum.Enum):
     """Reminder status enumeration"""
     SCHEDULED = "scheduled"
+    PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"

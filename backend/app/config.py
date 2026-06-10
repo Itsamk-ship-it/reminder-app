@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_PHONE_NUMBER: str = ""
+
+    # Phone parsing (used when user enters local format like 03xxxxxxxxx)
+    DEFAULT_PHONE_REGION: str = "PK"
     
     # Application
     APP_ENV: str = "development"

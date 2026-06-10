@@ -127,7 +127,16 @@ class ReminderService:
         
         return db.query(Reminder).filter(
             Reminder.status == ReminderStatus.SCHEDULED,
-            Reminder.scheduled_at <= now
+            Reminder.scheduled_at <= now,
+            Reminder.call_id.is_(None)
+        ).all()
+
+    @staticmethod
+    def get_active_call_reminders(db: Session) -> List[Reminder]:
+        """Get reminders with initiated calls awaiting final status."""
+        return db.query(Reminder).filter(
+            Reminder.status == ReminderStatus.SCHEDULED,
+            Reminder.call_id.is_not(None)
         ).all()
     
     @staticmethod
@@ -136,6 +145,7 @@ class ReminderService:
         reminder_id: int,
         status: ReminderStatus,
         call_id: Optional[str] = None,
+        reset_call_id: bool = False,
         error_message: Optional[str] = None,
         call_started_at: Optional[datetime] = None,
         call_ended_at: Optional[datetime] = None,
@@ -149,7 +159,9 @@ class ReminderService:
         
         reminder.status = status
         
-        if call_id:
+        if reset_call_id:
+            reminder.call_id = None
+        elif call_id is not None:
             reminder.call_id = call_id
         if error_message:
             reminder.error_message = error_message

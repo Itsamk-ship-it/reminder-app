@@ -52,12 +52,18 @@ class ReminderScheduler:
         db = SessionLocal()
         try:
             due_reminders = reminder_service.get_due_reminders(db)
+            active_call_reminders = reminder_service.get_active_call_reminders(db)
             
             if due_reminders:
                 logger.info(f"Found {len(due_reminders)} due reminders")
+            if active_call_reminders:
+                logger.info(f"Found {len(active_call_reminders)} active calls to reconcile")
             
             for reminder in due_reminders:
                 await self.process_reminder(db, reminder)
+
+            for reminder in active_call_reminders:
+                await self.reconcile_call_status(db, reminder)
                 
         except Exception as e:
             logger.error(f"Error processing due reminders: {str(e)}")
@@ -81,11 +87,11 @@ class ReminderScheduler:
                 call_id = result.get("call_id")
                 logger.info(f"Call initiated for reminder {reminder.id}: {call_id}")
                 
-                # Update reminder with call info
+                # Store call id; final state is reconciled later from provider status.
                 reminder_service.update_reminder_status(
                     db=db,
                     reminder_id=reminder.id,
-                    status=ReminderStatus.COMPLETED,
+                    status=ReminderStatus.SCHEDULED,
                     call_id=call_id,
                     call_started_at=datetime.now(timezone.utc)
                 )
@@ -118,13 +124,58 @@ class ReminderScheduler:
             logger.error(f"Exception processing reminder {reminder.id}: {str(e)}")
             
             reminder_service.increment_retry_count(db, reminder.id)
-            
+
             if reminder.retry_count >= MAX_RETRIES:
                 reminder_service.update_reminder_status(
                     db=db,
                     reminder_id=reminder.id,
                     status=ReminderStatus.FAILED,
                     error_message=str(e)
+                )
+
+    async def reconcile_call_status(self, db, reminder: Reminder):
+        """Sync reminder status with provider call state."""
+        if not reminder.call_id:
+            return
+
+        status_result = await vapi_service.get_call_status(reminder.call_id)
+        if not status_result.get("success"):
+            logger.warning(
+                f"Could not fetch status for reminder {reminder.id} call {reminder.call_id}: "
+                f"{status_result.get('error')}"
+            )
+            return
+
+        provider_status = (status_result.get("status") or "").lower()
+        if provider_status in {"queued", "ringing", "in-progress", "in_progress", "started"}:
+            return
+
+        if provider_status in {"ended", "completed", "succeeded", "success"}:
+            reminder_service.update_reminder_status(
+                db=db,
+                reminder_id=reminder.id,
+                status=ReminderStatus.COMPLETED,
+                call_ended_at=datetime.now(timezone.utc)
+            )
+            return
+
+        if provider_status in {"failed", "no-answer", "no_answer", "busy", "canceled", "cancelled"}:
+            reminder_service.increment_retry_count(db, reminder.id)
+
+            if reminder.retry_count >= MAX_RETRIES:
+                reminder_service.update_reminder_status(
+                    db=db,
+                    reminder_id=reminder.id,
+                    status=ReminderStatus.FAILED,
+                    error_message=f"Call {provider_status}"
+                )
+            else:
+                reminder_service.update_reminder_status(
+                    db=db,
+                    reminder_id=reminder.id,
+                    status=ReminderStatus.SCHEDULED,
+                    reset_call_id=True,
+                    error_message=f"Call {provider_status}"
                 )
 
 

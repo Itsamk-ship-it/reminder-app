@@ -8,10 +8,30 @@ from enum import Enum
 import phonenumbers
 import pytz
 
+from app.config import get_settings
+
+settings = get_settings()
+
+
+def normalize_phone_number(value: str) -> str:
+    """Normalize local or E.164 input into E.164 format."""
+    region = None if value.strip().startswith("+") else settings.DEFAULT_PHONE_REGION
+
+    try:
+        parsed = phonenumbers.parse(value, region)
+        if not phonenumbers.is_valid_number(parsed):
+            raise ValueError("Invalid phone number")
+        return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+    except phonenumbers.NumberParseException:
+        raise ValueError(
+            "Invalid phone number format. Use an international format like +923001234567 or a valid local number"
+        )
+
 
 class ReminderStatus(str, Enum):
     """Reminder status enumeration"""
     SCHEDULED = "scheduled"
+    PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -29,13 +49,7 @@ class ReminderBase(BaseModel):
     @classmethod
     def validate_phone_number(cls, v: str) -> str:
         """Validate phone number format"""
-        try:
-            parsed = phonenumbers.parse(v, None)
-            if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Invalid phone number")
-            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.NumberParseException:
-            raise ValueError("Invalid phone number format. Use E.164 format (e.g., +14155552671)")
+        return normalize_phone_number(v)
     
     @field_validator("timezone")
     @classmethod
@@ -74,13 +88,7 @@ class ReminderUpdate(BaseModel):
         """Validate phone number format"""
         if v is None:
             return v
-        try:
-            parsed = phonenumbers.parse(v, None)
-            if not phonenumbers.is_valid_number(parsed):
-                raise ValueError("Invalid phone number")
-            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
-        except phonenumbers.NumberParseException:
-            raise ValueError("Invalid phone number format. Use E.164 format (e.g., +14155552671)")
+        return normalize_phone_number(v)
     
     @field_validator("timezone")
     @classmethod

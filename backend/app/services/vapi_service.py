@@ -21,6 +21,29 @@ class VapiService:
         self.api_key = settings.VAPI_API_KEY
         self.phone_number_id = settings.VAPI_PHONE_NUMBER_ID
         self.assistant_id = settings.VAPI_ASSISTANT_ID
+
+    @staticmethod
+    def _extract_error_message(response: httpx.Response) -> str:
+        """Extract provider error in a user-friendly format."""
+        try:
+            data = response.json()
+            message = data.get("message") or data.get("error") or response.text
+        except Exception:
+            message = response.text
+
+        lower_msg = message.lower()
+        if (
+            "verified" in lower_msg
+            and "number" in lower_msg
+            and ("twilio" in lower_msg or "trial" in lower_msg)
+        ):
+            return (
+                "Destination number is not allowed by your telephony provider. "
+                "If you are on a Twilio trial account, verify the destination number "
+                "or upgrade the account to call unverified numbers."
+            )
+
+        return message
         
     @property
     def headers(self) -> Dict[str, str]:
@@ -77,7 +100,7 @@ class VapiService:
                         "data": data
                     }
                 else:
-                    error_msg = response.text
+                    error_msg = self._extract_error_message(response)
                     logger.error(f"Failed to create call: {response.status_code} - {error_msg}")
                     return {
                         "success": False,

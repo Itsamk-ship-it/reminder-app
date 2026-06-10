@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AxiosError } from "axios";
 import { toast } from "sonner";
 import { Phone, Calendar, MessageSquare, Globe, Type } from "lucide-react";
 
@@ -40,14 +41,26 @@ const reminderSchema = z.object({
     .string()
     .min(1, "Phone number is required")
     .regex(
-      /^\+?[1-9]\d{1,14}$/,
-      "Invalid phone number. Use E.164 format (e.g., +14155552671)"
+      /^[+\d][\d\s()-]{6,24}$/,
+      "Enter a valid phone number"
     ),
   scheduled_at: z.string().min(1, "Date and time is required"),
   timezone: z.string().min(1, "Timezone is required"),
 });
 
 type ReminderFormData = z.infer<typeof reminderSchema>;
+
+function getApiErrorMessage(error: Error): string {
+  if (error instanceof AxiosError) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (typeof first?.msg === "string") return first.msg;
+    }
+  }
+  return error.message;
+}
 
 interface ReminderFormDialogProps {
   open: boolean;
@@ -130,7 +143,7 @@ export function ReminderFormDialog({
       reset();
     },
     onError: (error: Error) => {
-      toast.error(`Failed to create reminder: ${error.message}`);
+      toast.error(`Failed to create reminder: ${getApiErrorMessage(error)}`);
     },
   });
 
@@ -149,7 +162,7 @@ export function ReminderFormDialog({
       onOpenChange(false);
     },
     onError: (error: Error) => {
-      toast.error(`Failed to update reminder: ${error.message}`);
+      toast.error(`Failed to update reminder: ${getApiErrorMessage(error)}`);
     },
   });
 
@@ -237,7 +250,7 @@ export function ReminderFormDialog({
               disabled={isLoading}
             />
             <p className="text-xs text-muted-foreground">
-              Use E.164 format with country code (e.g., +1 for US)
+              Enter international format (e.g., +923001234567) or local format (e.g., 03001234567)
             </p>
             {errors.phone_number && (
               <p className="text-sm text-destructive">
