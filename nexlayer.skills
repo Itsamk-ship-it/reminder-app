@@ -14,8 +14,8 @@ schema_version: "1"
 
 project:
   name: swift-nova-reminder-app
-  runtime: docs
-  port: 8000
+  runtime: fullstack
+  port: 3000
   live_url: "https://vibrant-wasp-swift-nova-reminder-app.cloud.nexlayer.ai"
   deploy_branch: main
   repo: "https://github.com/Itsamk-ship-it/reminder-app"
